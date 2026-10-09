@@ -1,0 +1,219 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      // O próprio utilizador lê o seu perfil; utilizadores autenticados podem
+      // consultar perfis de motoristas para apresentar os dados ao passageiro.
+      allow read: if isOwner(uid) ||
+        (signedIn() && resource.data.role == 'DRIVER');
+
+      allow create: if isOwner(uid) &&
+        request.resource.data.role in ['PASSENGER', 'DRIVER'];
+
+      allow update: if isOwner(uid) &&
+        request.resource.data.role == resource.data.role;
+
+      allow delete: if false;
+    }
+
+    match /drivers/{uid} {
+      allow read: if signedIn();
+
+      allow create: if isOwner(uid) &&
+        request.resource.data.status == 'OFFLINE' &&
+        getAfter(
+          /databases/$(database)/documents/users/$(uid)
+        ).data.role == 'DRIVER';
+
+      // vehicleId pode ser atualizado pelo próprio motorista ao guardar o veículo.
+      // O estado da conta continua limitado a alterações pelo seu proprietário.
+      allow update: if isOwner(uid) &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['status', 'vehicleId']);
+
+      allow delete: if false;
+    }
+
+    match /vehicles/{vehicleId} {
+      // O passageiro autenticado precisa de ler os dados do veículo do motorista.
+      allow read: if signedIn();
+
+      // Cada motorista só pode criar/editar o seu próprio documento de veículo.
+      // A aplicação guarda um veículo em vehicles/{UID_DO_MOTORISTA}.
+      allow create, update: if signedIn() &&
+        vehicleId == request.auth.uid &&
+        request.resource.data.driverId == request.auth.uid &&
+        request.resource.data.keys().hasAll([
+          'id',
+          'driverId',
+          'brand',
+          'model',
+          'plate',
+          'year',
+          'photoUrl'
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          'id',
+          'driverId',
+          'brand',
+          'model',
+          'plate',
+          'year',
+          'photoUrl'
+        ]) &&
+        request.resource.data.id is string &&
+        request.resource.data.brand is string &&
+        request.resource.data.model is string &&
+        request.resource.data.plate is string &&
+        request.resource.data.year is int &&
+        request.resource.data.photoUrl is string;
+
+      allow delete: if false;
+    }
+
+    function isDriver() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'DRIVER';
+    }
+
+    match /trips/{tripId} {
+      // Passageiros leem as suas viagens; motoristas leem pedidos disponíveis
+      // e viagens que lhes foram atribuídas.
+      allow read: if signedIn() && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        (isDriver() && resource.data.status == 'REQUESTED')
+      );
+
+      // Só o próprio passageiro pode criar um pedido ainda não atribuído.
+      allow create: if signedIn() &&
+        request.resource.data.passengerId == request.auth.uid &&
+        request.resource.data.driverId == '' &&
+        request.resource.data.status == 'REQUESTED' &&
+        request.resource.data.origin is map &&
+        request.resource.data.destination is map;
+
+      // Aceitação e transições do motorista. A aplicação usa transações para
+      // garantir que o pedido e o estado do motorista são alterados atomicamente.
+      allow update: if signedIn() && (
+        (
+          isDriver() &&
+          resource.data.status == 'REQUESTED' &&
+          request.resource.data.status == 'ACCEPTED' &&
+          request.resource.data.driverId == request.auth.uid &&
+          request.resource.data.passengerId == resource.data.passengerId &&
+          get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status == 'ONLINE' &&
+          getAfter(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status == 'ON_TRIP' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['driverId', 'status'])
+        ) ||
+        (
+          isDriver() &&
+          resource.data.driverId == request.auth.uid &&
+          resource.data.status == 'ACCEPTED' &&
+          request.resource.data.status == 'DRIVER_ARRIVED' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status'])
+        ) ||
+        (
+          isDriver() &&
+          resource.data.driverId == request.auth.uid &&
+          resource.data.status == 'DRIVER_ARRIVED' &&
+          request.resource.data.status == 'IN_PROGRESS' &&
+          request.resource.data.startedAt is int &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'startedAt'])
+        ) ||
+        (
+          isDriver() &&
+          resource.data.driverId == request.auth.uid &&
+          resource.data.status == 'IN_PROGRESS' &&
+          request.resource.data.status == 'COMPLETED' &&
+          request.resource.data.completedAt is int &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'completedAt'])
+        ) ||
+        (
+          resource.data.passengerId == request.auth.uid &&
+          resource.data.status == 'REQUESTED' &&
+          request.resource.data.status == 'CANCELLED' &&
+          request.resource.data.cancelledBy == 'PASSENGER' &&
+          request.resource.data.cancelledAt is int &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'cancelledBy', 'cancelledAt'])
+        ) ||
+        (
+          isDriver() &&
+          resource.data.driverId == request.auth.uid &&
+          resource.data.status in ['ACCEPTED', 'DRIVER_ARRIVED'] &&
+          request.resource.data.status == 'CANCELLED' &&
+          request.resource.data.cancelledBy == 'DRIVER' &&
+          request.resource.data.cancelledAt is int &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'cancelledBy', 'cancelledAt'])
+        )
+      );
+
+      allow delete: if false;
+    }
+
+    match /ratings/{ratingId} {
+      // A app calcula médias de avaliações a partir destes documentos.
+      allow read: if signedIn();
+
+      // Uma avaliação só pode ser criada pelo participante correto, após a
+      // viagem terminar, com pontuação de 1 a 5 e sem substituir avaliações.
+      allow create: if signedIn() &&
+        ratingId == request.resource.data.tripId + "_" + request.auth.uid &&
+        request.resource.data.raterId == request.auth.uid &&
+        request.resource.data.tripId is string &&
+        request.resource.data.raterRole in ['DRIVER', 'PASSENGER'] &&
+        request.resource.data.targetRole in ['DRIVER', 'PASSENGER'] &&
+        request.resource.data.score is int &&
+        request.resource.data.score >= 1 &&
+        request.resource.data.score <= 5 &&
+        get(
+          /databases/$(database)/documents/trips/$(request.resource.data.tripId)
+        ).data.status == 'COMPLETED' &&
+        (
+          (
+            request.resource.data.raterRole == 'DRIVER' &&
+            request.resource.data.targetRole == 'PASSENGER' &&
+            get(
+              /databases/$(database)/documents/trips/$(request.resource.data.tripId)
+            ).data.driverId == request.auth.uid &&
+            request.resource.data.targetId == get(
+              /databases/$(database)/documents/trips/$(request.resource.data.tripId)
+            ).data.passengerId
+          ) ||
+          (
+            request.resource.data.raterRole == 'PASSENGER' &&
+            request.resource.data.targetRole == 'DRIVER' &&
+            get(
+              /databases/$(database)/documents/trips/$(request.resource.data.tripId)
+            ).data.passengerId == request.auth.uid &&
+            request.resource.data.targetId == get(
+              /databases/$(database)/documents/trips/$(request.resource.data.tripId)
+            ).data.driverId
+          )
+        );
+
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
