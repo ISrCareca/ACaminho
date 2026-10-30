@@ -1,48 +1,115 @@
-# ACaminho (nome provisório) — App TVDE
+# ACaminho — App TVDE
 
-Projeto de Laboratório de Programação. Plataforma TVDE com app de passageiro, app de motorista e painel de administração.
-Stack: Android nativo (Kotlin + Jetpack Compose), Firebase (Auth + Firestore), arquitetura MVVM.
+O **ACaminho** é um projeto desenvolvido no âmbito da unidade curricular de Laboratório de Programação. Consiste numa aplicação Android para o setor TVDE, com funcionalidades destinadas a passageiros, motoristas e administradores.
+
+O objetivo é centralizar a experiência de utilização numa única plataforma, simplificando a gestão de viagens e disponibilizando ferramentas de acompanhamento e análise da atividade dos motoristas.
+
+**Tecnologias utilizadas:**
+- Android nativo
+- Kotlin
+- Jetpack Compose
+- Firebase Authentication
+- Cloud Firestore
+- Arquitetura MVVM
 
 Referência visual dos ecrãs: `docs/mockup.png`.
 
-## Estado: Fase 1 — Fundação
+## Estado do projeto
 
-- [x] Estrutura do projeto, tema e navegação
-- [x] Registo e login (email + palavra-passe), com escolha Passageiro / Motorista
-- [x] Perfil guardado no Firestore e encaminhamento por papel (passageiro, motorista, admin)
-- [x] Motorista: interruptor Online/Offline guardado no Firestore
-- [ ] Fase 2: passageiro (mapa, origem/destino, estimativa de preço, pedido)
-- [ ] Fase 3: motorista (receber pedido, aceitar/rejeitar, navegação integrada)
-- [ ] Fase 4: financeiro (resumo, ganhos, custos, rentabilidade)
-- [ ] Fase 5: administração
-- [ ] Fase 6: validações, testes e demonstração
+<text>**Fase 1 — Fundação (concluída)**</text>
 
-## Como arrancar
+- Estrutura inicial do projeto, tema e navegação.
+- Registo e início de sessão com email e palavra-passe.
+- Escolha do tipo de utilizador: Passageiro ou Motorista.
+- Armazenamento dos perfis no Cloud Firestore.
+- Encaminhamento dos utilizadores de acordo com o respetivo papel (PASSENGER, DRIVER ou ADMIN).
+- Interruptor de estado Online/Offline do motorista, com persistência no Firestore.
 
-1. Instala o Android Studio (versão recente, com JDK 17).
-2. Abre a pasta do projeto (`File > Open`). Se o Android Studio pedir, aceita descarregar o Gradle 8.9 e sincroniza.
-3. Cria o projeto no [Firebase Console](https://console.firebase.google.com):
-   - Adiciona uma app Android com o package `pt.kaminho.app`.
-   - Descarrega o `google-services.json` e coloca-o em `app/` (está no `.gitignore`, não o publiques).
-   - Em **Authentication > Sign-in method**, ativa **Email/Password**.
-   - Em **Firestore Database**, cria a base de dados e, em **Rules**, cola o conteúdo de `firestore.rules`.
-4. Sincroniza o Gradle e corre a app num emulador ou telemóvel.
+**Fases seguintes — Planeadas**
 
-## Estrutura
+- **Fase 2 — Passageiro:** mapa, definição de origem e destino, estimativa de preço e pedido de viagem.
+- **Fase 3 — Motorista:** receção e gestão de pedidos, aceitação de viagens e navegação integrada.
+- **Fase 4 — Gestão financeira:** resumo da atividade, ganhos, despesas e indicadores de rentabilidade.
+- **Fase 5 — Administração:** gestão de utilizadores, motoristas, veículos e viagens.
+- **Fase 6 — Validação e entrega:** testes, validação das funcionalidades e preparação da demonstração final.
 
-```
-app/src/main/java/pt/ACaminho/app/
+## Como executar o projeto
+
+### Pré-requisitos
+
+- Android Studio (versão recente).
+- JDK 17.
+- Emulador Android ou dispositivo físico.
+- Projeto Firebase configurado.
+
+### Configuração do Firebase
+
+1. Acede à [Firebase Console](https://console.firebase.google.com/) e cria um projeto.
+2. Adiciona uma aplicação Android com o seguinte identificador:
+
+   `pt.kaminho.app`
+
+3. Descarrega o ficheiro `google-services.json`.
+4. Coloca o ficheiro na pasta `app/` do projeto.
+5. Em **Authentication → Sign-in method**, ativa o método **Email/Password**.
+6. Em **Firestore Database**, cria a base de dados.
+7. Configura as regras de segurança do Firestore utilizando o ficheiro `firestore.rules` existente no projeto.
+
+### Executar a aplicação
+
+1. Abre o Android Studio.
+2. Seleciona **File → Open** e escolhe a pasta do projeto.
+3. Aguarda pela sincronização do Gradle.
+4. Se necessário, aceita a instalação das dependências solicitadas pelo Android Studio.
+5. Seleciona um emulador ou dispositivo Android.
+6. Executa a aplicação através de **Run**.
+
+## Estrutura do projeto
+
+```text
+app/src/main/java/pt/kaminho/app/
 ├── data/
-│   ├── model/        User, Driver, Vehicle, Place, Trip
-│   ├── repository/   AuthRepository, DriverRepository
-│   └── firebase/     tradução de erros do Firebase
-├── navigation/       AppNavigation (rotas e redirecionamento por papel)
-├── ui/               auth, passenger, driver, admin, components, theme
-├── viewmodel/        AuthViewModel, DriverViewModel
+│   ├── model/        # Modelos: User, Driver, Vehicle, Place e Trip
+│   ├── repository/   # Repositórios: AuthRepository e DriverRepository
+│   └── firebase/     # Tratamento de erros do Firebase
+├── navigation/       # Navegação e encaminhamento por perfil
+├── ui/
+│   ├── auth/         # Autenticação
+│   ├── passenger/    # Interface do passageiro
+│   ├── driver/       # Interface do motorista
+│   ├── admin/        # Interface de administração
+│   ├── components/   # Componentes reutilizáveis
+│   └── theme/        # Tema e estilos
+├── viewmodel/        # AuthViewModel e DriverViewModel
 └── MainActivity.kt
 ```
 
-## Notas
+## Notas importantes
 
-- O administrador não se regista pela app: cria-se à mão no Firestore (`users/{uid}` com `role: "ADMIN"`) e as regras impedem que alguém se atribua esse papel.
-- Sem `google-services.json` o projeto compila, mas a app falha ao arrancar.
+- O ficheiro `google-services.json` não deve ser publicado no repositório Git.
+- O projeto necessita de configuração Firebase para funcionar corretamente.
+- O perfil de administrador não está disponível através do registo normal da aplicação. A atribuição desse papel deve ser efetuada por um processo administrativo controlado e seguro.
+- As funcionalidades identificadas como planeadas ainda não devem ser consideradas implementadas.
+
+## Equipa
+
+**Grupo K — ACaminho**
+
+## Equipa
+
+**Grupo K — ACaminho**
+
+A função de Scrum Master é rotativa, sendo atribuída a um elemento diferente em cada sprint.
+
+| Sprint | Scrum Master |
+|---|---|
+| Sprint 0 | Gabriel Costa |
+| Sprint 1 | Simão Cerejo |
+| Sprint 2 | Gabriel Rocha |
+| Sprint 3 | Diogo Pereira |
+
+**Equipa de desenvolvimento:**
+- Gabriel Costa
+- Simão Cerejo
+- Gabriel Rocha
+- Diogo Pereira
