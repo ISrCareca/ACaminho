@@ -95,10 +95,6 @@ app/src/main/java/pt/kaminho/app/
 
 **Grupo K — ACaminho**
 
-## Equipa
-
-**Grupo K — ACaminho**
-
 A função de Scrum Master é rotativa, sendo atribuída a um elemento diferente em cada sprint.
 
 | Sprint | Scrum Master |
